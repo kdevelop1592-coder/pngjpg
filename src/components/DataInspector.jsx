@@ -1,16 +1,92 @@
 import React, { useEffect, useRef } from 'react';
 
 export default function DataInspector({ imageData, activePixelIndex, onHoverPixel }) {
-    const scrollRef = useRef(null);
-    const itemRefs = useRef({});
+    const canvasRef = useRef(null);
+    const containerRef = useRef(null);
+
+    // Constants for grid layout
+    const CELL_WIDTH = 90;
+    const CELL_HEIGHT = 20;
+    const FONT_SIZE = 12;
 
     useEffect(() => {
-        if (activePixelIndex !== null && itemRefs.current[activePixelIndex] && scrollRef.current) {
-            const el = itemRefs.current[activePixelIndex];
-            // Simple scroll into view logic could go here if needed, 
-            // but might be too jumpy for hover. highlighting is enough for now.
+        if (!imageData || !canvasRef.current) return;
+
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        const { width, height, pixels } = imageData;
+
+        // Set canvas dimensions to fit all data
+        const totalWidth = width * CELL_WIDTH;
+        const totalHeight = height * CELL_HEIGHT;
+
+        // Handle high DPI displays for sharp text
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = totalWidth * dpr;
+        canvas.height = totalHeight * dpr;
+        canvas.style.width = `${totalWidth}px`;
+        canvas.style.height = `${totalHeight}px`;
+
+        ctx.scale(dpr, dpr);
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'center';
+        ctx.font = `${FONT_SIZE}px monospace`;
+
+        // Clear canvas
+        ctx.fillStyle = '#1e1e1e'; // Dark background matching theme roughly
+        ctx.fillRect(0, 0, totalWidth, totalHeight);
+
+        // Draw cells
+        pixels.forEach((pixel, i) => {
+            const col = i % width;
+            const row = Math.floor(i / width);
+            const x = col * CELL_WIDTH;
+            const y = row * CELL_HEIGHT;
+
+            // Highlight background if active
+            if (i === activePixelIndex) {
+                ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+                ctx.fillRect(x, y, CELL_WIDTH, CELL_HEIGHT);
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x, y, CELL_WIDTH, CELL_HEIGHT);
+            } else {
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 0.5;
+                ctx.strokeRect(x, y, CELL_WIDTH, CELL_HEIGHT);
+            }
+
+            // Draw Text
+            ctx.fillStyle = i === activePixelIndex ? '#fff' : '#aaa';
+            const text = `[${pixel.r},${pixel.g},${pixel.b}]`;
+            ctx.fillText(text, x + CELL_WIDTH / 2, y + CELL_HEIGHT / 2);
+        });
+
+    }, [imageData, activePixelIndex]);
+
+    const handleMouseMove = (e) => {
+        if (!imageData || !canvasRef.current) return;
+
+        const rect = canvasRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        const col = Math.floor(x / CELL_WIDTH);
+        const row = Math.floor(y / CELL_HEIGHT);
+
+        if (col >= 0 && col < imageData.width && row >= 0 && row < imageData.height) {
+            const index = row * imageData.width + col;
+            onHoverPixel(index);
+        } else {
+            // Do not reset to null here immediately to avoid flickering when moving between cells slightly? 
+            // Actually, PixelViewer logic resets it, so we should too for consistency.
+            // onHoverPixel(null);
         }
-    }, [activePixelIndex]);
+    };
+
+    const handleMouseLeave = () => {
+        onHoverPixel(null);
+    }
 
     if (!imageData) return (
         <div className="glass-card" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
@@ -23,48 +99,25 @@ export default function DataInspector({ imageData, activePixelIndex, onHoverPixe
             <div style={{ padding: '1rem', borderBottom: '1px solid var(--glass-border)' }}>
                 <h3 style={{ margin: 0 }}>Computer Vision (Raw Data)</h3>
                 <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', opacity: 0.7 }}>
-                    Each box represents one pixel's color code [R, G, B]
+                    Real-time memory view: {imageData.width}x{imageData.height} matrix
                 </p>
             </div>
 
             <div
-                ref={scrollRef}
+                ref={containerRef}
                 style={{
                     flex: 1,
                     overflow: 'auto',
-                    padding: '1rem',
-                    fontFamily: 'monospace',
-                    fontSize: '0.8rem'
+                    position: 'relative',
+                    background: '#1a1a1a'
                 }}
             >
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: `repeat(${imageData.width}, max-content)`,
-                    gap: '2px'
-                }}>
-                    {imageData.pixels.map((pixel, i) => (
-                        <div
-                            key={i}
-                            ref={el => itemRefs.current[i] = el}
-                            onMouseEnter={() => onHoverPixel(i)}
-                            className="data-cell"
-                            style={{
-                                padding: '4px',
-                                background: activePixelIndex === i ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0,0,0,0.2)',
-                                border: activePixelIndex === i ? '1px solid #00ff00' : '1px solid transparent',
-                                color: activePixelIndex === i ? 'white' : '#aaa',
-                                borderRadius: '4px',
-                                textAlign: 'center',
-                                cursor: 'crosshair',
-                                whiteSpace: 'nowrap',
-                                transition: 'all 0.1s'
-                            }}
-                            title={`Pixel ${i}: ${pixel.hex}`}
-                        >
-                            [{pixel.r},{pixel.g},{pixel.b}]
-                        </div>
-                    ))}
-                </div>
+                <canvas
+                    ref={canvasRef}
+                    onMouseMove={handleMouseMove}
+                    onMouseLeave={handleMouseLeave}
+                    style={{ display: 'block' }}
+                />
             </div>
         </div>
     );
