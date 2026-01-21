@@ -1,11 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel }) {
+export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel, pixelSize = 20 }) {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
 
     // Configurable pixel size for visualization
-    const PIXEL_SIZE = 20;
     const GAP = 1;
 
     useEffect(() => {
@@ -16,8 +15,8 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel 
         const { width, height, pixels } = imageData;
 
         // Calculate functionality canvas size
-        canvas.width = width * (PIXEL_SIZE + GAP);
-        canvas.height = height * (PIXEL_SIZE + GAP);
+        canvas.width = width * (pixelSize + GAP);
+        canvas.height = height * (pixelSize + GAP);
 
         // Draw Pixels
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -29,19 +28,19 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel 
             // Draw background for transparency
             ctx.fillStyle = '#eee';
             ctx.fillRect(
-                x * (PIXEL_SIZE + GAP),
-                y * (PIXEL_SIZE + GAP),
-                PIXEL_SIZE,
-                PIXEL_SIZE
+                x * (pixelSize + GAP),
+                y * (pixelSize + GAP),
+                pixelSize,
+                pixelSize
             );
 
             // Draw actual pixel
             ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${pixel.a / 255})`;
             ctx.fillRect(
-                x * (PIXEL_SIZE + GAP),
-                y * (PIXEL_SIZE + GAP),
-                PIXEL_SIZE,
-                PIXEL_SIZE
+                x * (pixelSize + GAP),
+                y * (pixelSize + GAP),
+                pixelSize,
+                pixelSize
             );
 
             // Draw Highlight
@@ -49,15 +48,15 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel 
                 ctx.strokeStyle = '#00ff00';
                 ctx.lineWidth = 2;
                 ctx.strokeRect(
-                    x * (PIXEL_SIZE + GAP),
-                    y * (PIXEL_SIZE + GAP),
-                    PIXEL_SIZE,
-                    PIXEL_SIZE
+                    x * (pixelSize + GAP),
+                    y * (pixelSize + GAP),
+                    pixelSize,
+                    pixelSize
                 );
             }
         });
 
-    }, [imageData, activePixelIndex]);
+    }, [imageData, activePixelIndex, pixelSize]);
 
     const handleMouseMove = (e) => {
         if (!imageData || !canvasRef.current) return;
@@ -66,8 +65,8 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel 
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
-        const col = Math.floor(x / (PIXEL_SIZE + GAP));
-        const row = Math.floor(y / (PIXEL_SIZE + GAP));
+        const col = Math.floor(x / (pixelSize + GAP));
+        const row = Math.floor(y / (pixelSize + GAP));
 
         if (col >= 0 && col < imageData.width && row >= 0 && row < imageData.height) {
             const index = row * imageData.width + col;

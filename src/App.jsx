@@ -10,6 +10,7 @@ function App() {
     const [activePixelIndex, setActivePixelIndex] = useState(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [resolution, setResolution] = useState(64);
+    const [pixelSize, setPixelSize] = useState(20);
     const [sourceFile, setSourceFile] = useState(null);
 
     // Re-process image when resolution changes
@@ -90,6 +91,19 @@ function App() {
                             style={{ cursor: 'pointer' }}
                         />
                     </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.1)', padding: '0.5rem 1rem', borderRadius: '8px' }}>
+                        <span style={{ fontSize: '0.9rem' }}>Zoom: {pixelSize}px</span>
+                        <input
+                            type="range"
+                            min="5"
+                            max="40"
+                            step="1"
+                            value={pixelSize}
+                            onChange={(e) => setPixelSize(Number(e.target.value))}
+                            style={{ cursor: 'pointer' }}
+                        />
+                    </div>
                 </div>
 
                 {/* Main Visualization Area */}
@@ -102,6 +116,7 @@ function App() {
                             imageData={imageData}
                             activePixelIndex={activePixelIndex}
                             onHoverPixel={setActivePixelIndex}
+                            pixelSize={pixelSize}
                         />
                     </div>
 
