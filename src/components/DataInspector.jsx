@@ -31,7 +31,7 @@ export default function DataInspector({ imageData, activePixelIndex, onHoverPixe
                 ref={scrollRef}
                 style={{
                     flex: 1,
-                    overflowY: 'auto',
+                    overflow: 'auto',
                     padding: '1rem',
                     fontFamily: 'monospace',
                     fontSize: '0.8rem'
@@ -39,7 +39,7 @@ export default function DataInspector({ imageData, activePixelIndex, onHoverPixe
             >
                 <div style={{
                     display: 'grid',
-                    gridTemplateColumns: `repeat(${imageData.width}, 1fr)`,
+                    gridTemplateColumns: `repeat(${imageData.width}, max-content)`,
                     gap: '2px'
                 }}>
                     {imageData.pixels.map((pixel, i) => (
