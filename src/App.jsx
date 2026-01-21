@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import PixelViewer from './components/PixelViewer';
 import DataInspector from './components/DataInspector';
