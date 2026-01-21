@@ -62,6 +62,13 @@ function App() {
         processImageWithStatus(blob);
     };
 
+    const handleZoom = (delta) => {
+        setPixelSize(prev => {
+            const next = prev + delta;
+            return Math.min(Math.max(next, 5), 40);
+        });
+    };
+
     return (
         <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
             <Header />
@@ -117,6 +124,7 @@ function App() {
                             activePixelIndex={activePixelIndex}
                             onHoverPixel={setActivePixelIndex}
                             pixelSize={pixelSize}
+                            onZoom={handleZoom}
                         />
                     </div>
 
