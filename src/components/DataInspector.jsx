@@ -109,7 +109,9 @@ export default function DataInspector({ imageData, activePixelIndex, onHoverPixe
                     flex: 1,
                     overflow: 'auto',
                     position: 'relative',
-                    background: '#1a1a1a'
+                    background: '#1a1a1a',
+                    paddingBottom: '24px', // Reserve space for horizontal scrollbar
+                    paddingRight: '24px'   // Reserve space for vertical scrollbar
                 }}
             >
                 <canvas
