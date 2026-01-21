@@ -12,6 +12,7 @@ function App() {
     const [resolution, setResolution] = useState(64);
     const [pixelSize, setPixelSize] = useState(20);
     const [sourceFile, setSourceFile] = useState(null);
+    const [focusIndex, setFocusIndex] = useState(null);
 
     // Re-process image when resolution changes
     useEffect(() => {
@@ -26,6 +27,7 @@ function App() {
             const data = await processImage(file, resolution);
             setImageData(data);
             setActivePixelIndex(null);
+            setFocusIndex(null);
         } catch (error) {
             console.error(error);
             alert("Failed to process image");
@@ -67,6 +69,11 @@ function App() {
             const next = prev + delta;
             return Math.min(Math.max(next, 5), 40);
         });
+    };
+
+    const handlePixelClick = (index) => {
+        setActivePixelIndex(index);
+        setFocusIndex(index);
     };
 
     return (
@@ -125,6 +132,7 @@ function App() {
                             onHoverPixel={setActivePixelIndex}
                             pixelSize={pixelSize}
                             onZoom={handleZoom}
+                            onPixelClick={handlePixelClick}
                         />
                     </div>
 
@@ -135,6 +143,7 @@ function App() {
                             imageData={imageData}
                             activePixelIndex={activePixelIndex}
                             onHoverPixel={setActivePixelIndex}
+                            scrollToIndex={focusIndex}
                         />
                     </div>
 

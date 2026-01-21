@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 
-export default function DataInspector({ imageData, activePixelIndex, onHoverPixel }) {
+export default function DataInspector({ imageData, activePixelIndex, onHoverPixel, scrollToIndex }) {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
 
@@ -63,6 +63,25 @@ export default function DataInspector({ imageData, activePixelIndex, onHoverPixe
         });
 
     }, [imageData, activePixelIndex]);
+
+    // Handle programmatic scrolling to specific index
+    useEffect(() => {
+        if (scrollToIndex === null || !imageData || !containerRef.current) return;
+
+        const { width } = imageData;
+        const col = scrollToIndex % width;
+        const row = Math.floor(scrollToIndex / width);
+
+        // Calculate position in pixels
+        const targetX = col * CELL_WIDTH;
+        const targetY = row * CELL_HEIGHT;
+
+        // Center the target cell in the container
+        const container = containerRef.current;
+        container.scrollTop = targetY - container.clientHeight / 2 + CELL_HEIGHT / 2;
+        container.scrollLeft = targetX - container.clientWidth / 2 + CELL_WIDTH / 2;
+
+    }, [scrollToIndex, imageData]);
 
     const handleMouseMove = (e) => {
         if (!imageData || !canvasRef.current) return;

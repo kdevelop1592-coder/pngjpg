@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel, pixelSize = 20, onZoom }) {
+export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel, pixelSize = 20, onZoom, onPixelClick }) {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
 
@@ -58,6 +58,24 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
 
     }, [imageData, activePixelIndex, pixelSize]);
 
+    const handleClick = (e) => {
+        if (!imageData || !canvasRef.current) return;
+
+        const rect = canvasRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        const col = Math.floor(x / (pixelSize + GAP));
+        const row = Math.floor(y / (pixelSize + GAP));
+
+        if (col >= 0 && col < imageData.width && row >= 0 && row < imageData.height) {
+            const index = row * imageData.width + col;
+            if (onPixelClick) {
+                onPixelClick(index);
+            }
+        }
+    };
+
     const handleMouseMove = (e) => {
         if (!imageData || !canvasRef.current) return;
 
@@ -107,6 +125,7 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
             {imageData ? (
                 <canvas
                     ref={canvasRef}
+                    onClick={handleClick}
                     onMouseMove={handleMouseMove}
                     onMouseLeave={() => onHoverPixel(null)}
                     style={{ cursor: 'crosshair', imageRendering: 'pixelated' }}
