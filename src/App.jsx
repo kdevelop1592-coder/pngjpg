@@ -9,14 +9,20 @@ function App() {
     const [imageData, setImageData] = useState(null);
     const [activePixelIndex, setActivePixelIndex] = useState(null);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [resolution, setResolution] = useState(64);
+    const [sourceFile, setSourceFile] = useState(null);
 
-    const handleFileUpload = async (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+    // Re-process image when resolution changes
+    useEffect(() => {
+        if (sourceFile) {
+            processImageWithStatus(sourceFile);
+        }
+    }, [resolution]);
 
+    const processImageWithStatus = async (file) => {
         setIsProcessing(true);
         try {
-            const data = await processImage(file);
+            const data = await processImage(file, resolution);
             setImageData(data);
             setActivePixelIndex(null);
         } catch (error) {
@@ -27,9 +33,15 @@ function App() {
         }
     };
 
+    const handleFileUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setSourceFile(file);
+        processImageWithStatus(file);
+    };
+
     const handleSampleImage = async () => {
-        // Create a simple 4x4 sample image programmatically or load a specialized one
-        // For now, let's just create a data URL for a simple tiny gradient
+        // Create a simple 4x4 sample image programmatically
         const canvas = document.createElement('canvas');
         canvas.width = 4;
         canvas.height = 4;
@@ -45,8 +57,8 @@ function App() {
         const res = await fetch(url);
         const blob = await res.blob();
 
-        setIsProcessing(true);
-        processImage(blob).then(setImageData).finally(() => setIsProcessing(false));
+        setSourceFile(blob);
+        processImageWithStatus(blob);
     };
 
     return (
@@ -55,7 +67,7 @@ function App() {
             <main style={{ flex: 1, padding: '1rem', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
                 {/* Control Bar */}
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem', gap: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
                     <label className="btn-primary" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <Upload size={18} />
                         Upload Image
@@ -63,8 +75,21 @@ function App() {
                     </label>
                     <button className="btn-secondary" onClick={handleSampleImage} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <FileImage size={18} />
-                        Load Sample (4x4)
+                        Load Sample
                     </button>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.1)', padding: '0.5rem 1rem', borderRadius: '8px' }}>
+                        <span style={{ fontSize: '0.9rem' }}>Resolution: {resolution}px</span>
+                        <input
+                            type="range"
+                            min="16"
+                            max="100"
+                            step="4"
+                            value={resolution}
+                            onChange={(e) => setResolution(Number(e.target.value))}
+                            style={{ cursor: 'pointer' }}
+                        />
+                    </div>
                 </div>
 
                 {/* Main Visualization Area */}

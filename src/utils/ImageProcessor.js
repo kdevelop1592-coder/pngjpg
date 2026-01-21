@@ -2,7 +2,7 @@
  * Utility to process images and extract pixel data.
  */
 
-export const processImage = (file, maxWidth = 32) => {
+export const processImage = (file, maxWidth = 64) => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (event) => {
