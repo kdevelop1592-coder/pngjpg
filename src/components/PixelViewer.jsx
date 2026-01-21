@@ -15,8 +15,13 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
         const { width, height, pixels } = imageData;
 
         // Calculate functionality canvas size
-        canvas.width = width * (pixelSize + GAP);
-        canvas.height = height * (pixelSize + GAP);
+        const desiredWidth = width * (pixelSize + GAP);
+        const desiredHeight = height * (pixelSize + GAP);
+
+        if (canvas.width !== desiredWidth || canvas.height !== desiredHeight) {
+            canvas.width = desiredWidth;
+            canvas.height = desiredHeight;
+        }
 
         // Draw Pixels
         ctx.clearRect(0, 0, canvas.width, canvas.height);

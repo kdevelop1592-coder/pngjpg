@@ -22,17 +22,34 @@ export default function DataInspector({ imageData, activePixelIndex, onHoverPixe
 
         // Handle high DPI displays for sharp text
         const dpr = window.devicePixelRatio || 1;
-        canvas.width = totalWidth * dpr;
-        canvas.height = totalHeight * dpr;
-        canvas.style.width = `${totalWidth}px`;
-        canvas.style.height = `${totalHeight}px`;
+        const currentWidth = canvas.width;
+        const currentHeight = canvas.height;
+        const desiredWidth = totalWidth * dpr;
+        const desiredHeight = totalHeight * dpr;
 
-        ctx.scale(dpr, dpr);
+        // Prepare context
+        let isResized = false;
+        if (currentWidth !== desiredWidth || currentHeight !== desiredHeight) {
+            canvas.width = desiredWidth;
+            canvas.height = desiredHeight;
+            canvas.style.width = `${totalWidth}px`;
+            canvas.style.height = `${totalHeight}px`;
+            ctx.scale(dpr, dpr);
+            isResized = true;
+        }
+
+        // We need to reset context properties if resized (context is reset)
+        // or just set them always to be safe
         ctx.textBaseline = 'middle';
         ctx.textAlign = 'center';
         ctx.font = `${FONT_SIZE}px monospace`;
 
         // Clear canvas
+        // If resized, it's already cleared. But explicit clear is safer if no resize.
+        if (!isResized) {
+            ctx.clearRect(0, 0, totalWidth, totalHeight);
+        }
+
         ctx.fillStyle = '#1e1e1e'; // Dark background matching theme roughly
         ctx.fillRect(0, 0, totalWidth, totalHeight);
 
@@ -42,6 +59,9 @@ export default function DataInspector({ imageData, activePixelIndex, onHoverPixe
             const row = Math.floor(i / width);
             const x = col * CELL_WIDTH;
             const y = row * CELL_HEIGHT;
+
+            // Only draw visible cells? For now draw all is fine if performance is okay.
+            // But we can optimize loop too if needed. 44x64 = 2816 items. Fast enough.
 
             // Highlight background if active
             if (i === activePixelIndex) {
