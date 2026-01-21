@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel, pixelSize = 20 }) {
+export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel, pixelSize = 20, onZoom }) {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
 
@@ -76,10 +76,25 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
         }
     };
 
+    const handleWheel = (e) => {
+        if (e.ctrlKey) {
+            // Prevent browser zoom if possible, though React event might be too late for some browsers
+            // But main goal is to detect intent
+            // e.preventDefault(); // React synthetic events might warn about this if passive.
+
+            // Zoom In/Out
+            const delta = e.deltaY < 0 ? 1 : -1;
+            if (onZoom) {
+                onZoom(delta);
+            }
+        }
+    };
+
     return (
         <div
             ref={containerRef}
             className="pixel-viewer glass-card"
+            onWheel={handleWheel}
             style={{
                 overflow: 'auto',
                 display: 'flex',
