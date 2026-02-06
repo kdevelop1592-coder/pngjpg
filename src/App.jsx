@@ -149,7 +149,7 @@ function App() {
                     {/* Left: Original Image */}
                     <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                         <h2 style={{ fontSize: '1.2rem', margin: '0 0 0.5rem 0', textAlign: 'center' }}>0. Original Image</h2>
-                        <OriginalImageViewer imageUrl={imageData?.url} />
+                        <OriginalImageViewer imageUrl={imageData?.url} onPixelClick={handlePixelClick} />
                     </div>
 
                     {/* Middle: Pixel Visualizer */}
@@ -162,6 +162,7 @@ function App() {
                             pixelSize={pixelSize}
                             onZoom={handleZoom}
                             onPixelClick={handlePixelClick}
+                            centerOnIndex={focusIndex}
                         />
                     </div>
 

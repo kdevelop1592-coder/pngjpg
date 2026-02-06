@@ -1,53 +1,14 @@
 import React, { useRef, useEffect, useState } from 'react';
 
-export default function OriginalImageViewer({ imageUrl }) {
+export default function OriginalImageViewer({ imageUrl, onPixelClick }) {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
     const [scale, setScale] = useState(1);
     const [offset, setOffset] = useState({ x: 0, y: 0 });
     const [isDragging, setIsDragging] = useState(false);
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+    const clickStartRef = useRef({ x: 0, y: 0 });
 
-    useEffect(() => {
-        if (!imageUrl || !canvasRef.current || !containerRef.current) return;
-
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        const img = new Image();
-
-        img.onload = () => {
-            // Fit image to container initially
-            const container = containerRef.current;
-            const containerAspect = container.clientWidth / container.clientHeight;
-            const imgAspect = img.width / img.height;
-
-            let initialScale = 1;
-            if (imgAspect > containerAspect) {
-                initialScale = (container.clientWidth * 0.9) / img.width;
-            } else {
-                initialScale = (container.clientHeight * 0.9) / img.height;
-            }
-
-            // Set initial state only if it's a new image loaded (naively checking via scale === 1 might be reset by parent, but local state persists)
-            // For now, let's just draw whenever render happens.
-
-            canvas.width = container.clientWidth;
-            canvas.height = container.clientHeight;
-
-            // Draw
-            draw(ctx, img, canvas.width, canvas.height, initialScale, { x: 0, y: 0 });
-
-            // Update state with initial values if this is the first load of this image? 
-            // Actually, better to control draw via state.
-
-            // But for simplicity in this effect, we just want to ensure we have the image object ready.
-            // We should probably store the image object in state or ref to avoid reloading.
-        };
-        img.src = imageUrl;
-
-    }, [imageUrl]);
-
-    // Better approach: Load image once, then trigger redraws based on state
     const [imageObj, setImageObj] = useState(null);
 
     useEffect(() => {
@@ -80,11 +41,6 @@ export default function OriginalImageViewer({ imageUrl }) {
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Calculate centered position
-        // Current logic: Image is drawn at (center + offset) * scale ??? 
-        // Let's do standard pan/zoom logic:
-        // Translate to center -> scale -> translate offset
-
         const centerX = canvas.width / 2;
         const centerY = canvas.height / 2;
 
@@ -103,7 +59,8 @@ export default function OriginalImageViewer({ imageUrl }) {
     const handleMouseDown = (e) => {
         setIsDragging(true);
         setDragStart({ x: e.clientX - offset.x, y: e.clientY - offset.y });
-        // change cursor style
+        clickStartRef.current = { x: e.clientX, y: e.clientY };
+
         if (containerRef.current) containerRef.current.style.cursor = 'grabbing';
     };
 
@@ -115,9 +72,46 @@ export default function OriginalImageViewer({ imageUrl }) {
         setOffset({ x: newX, y: newY });
     };
 
-    const handleMouseUp = () => {
+    const handleMouseUp = (e) => {
         setIsDragging(false);
         if (containerRef.current) containerRef.current.style.cursor = 'grab';
+
+        // Check for click (minimal movement)
+        const dist = Math.hypot(e.clientX - clickStartRef.current.x, e.clientY - clickStartRef.current.y);
+        if (dist < 5 && imageObj && onPixelClick) {
+            handleImageClick(e);
+        }
+    };
+
+    const handleImageClick = (e) => {
+        if (!canvasRef.current || !imageObj) return;
+
+        const canvas = canvasRef.current;
+        const rect = canvas.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const clickY = e.clientY - rect.top;
+
+        // Inverse Transform:
+        // Screen -> Canvas (already done with rect)
+        // Canvas -> Untranslate Center & Offset -> Unscale -> Uncenter Image
+        // x_img = (x_canvas - center_x - offset_x) / scale + img_w / 2
+
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+
+        const rawX = (clickX - centerX - offset.x) / scale;
+        const rawY = (clickY - centerY - offset.y) / scale;
+
+        const imgX = rawX + imageObj.width / 2;
+        const imgY = rawY + imageObj.height / 2;
+
+        const col = Math.floor(imgX);
+        const row = Math.floor(imgY);
+
+        if (col >= 0 && col < imageObj.width && row >= 0 && row < imageObj.height) {
+            const index = row * imageObj.width + col;
+            onPixelClick(index);
+        }
     };
 
     const handleWheel = (e) => {
@@ -151,7 +145,7 @@ export default function OriginalImageViewer({ imageUrl }) {
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
+                onMouseLeave={() => setIsDragging(false)}
                 onWheel={handleWheel}
             >
                 <canvas ref={canvasRef} style={{ display: 'block' }} />

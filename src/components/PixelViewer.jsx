@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useMemo, useState } from 'react';
 
-export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel, pixelSize = 20, onZoom, onPixelClick }) {
+export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel, pixelSize = 20, onZoom, onPixelClick, centerOnIndex }) {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
     const offscreenCanvasRef = useRef(null);
@@ -283,9 +283,36 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
         }
     };
 
-    // Center image on load
+    // Center on specific index (programmatic navigation)
     useEffect(() => {
-        if (imageData && containerRef.current && dimensions.width > 0) {
+        if (centerOnIndex !== null && centerOnIndex >= 0 && imageData && containerRef.current) {
+            const { width } = imageData;
+            const col = centerOnIndex % width;
+            const row = Math.floor(centerOnIndex / width);
+
+            const container = containerRef.current;
+            // Calculate target pixel position in world space
+            const targetX = col * (pixelSize + GAP);
+            const targetY = row * (pixelSize + GAP);
+
+            // Calculate pan offset to center that pixel
+            // ScreenX = WorldX + PanX
+            // CenterX = TargetX + PanX  =>  PanX = CenterX - TargetX
+            const centerX = container.clientWidth / 2;
+            const centerY = container.clientHeight / 2;
+
+            // Adjust to center the pixel itself
+            panOffset.current = {
+                x: centerX - targetX - (pixelSize / 2),
+                y: centerY - targetY - (pixelSize / 2)
+            };
+            requestRender();
+        }
+    }, [centerOnIndex, imageData, pixelSize]); // Re-center if pixel size changes? Maybe yes for keeping focus.
+
+    // Center image on load (only if no specific focus)
+    useEffect(() => {
+        if (imageData && containerRef.current && dimensions.width > 0 && centerOnIndex === null) {
             const container = containerRef.current;
             // Center: (ContainerW - ContentW) / 2
             panOffset.current = {
