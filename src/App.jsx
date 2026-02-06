@@ -100,7 +100,7 @@ function App() {
                         <input
                             type="range"
                             min="16"
-                            max="300"
+                            max="1024"
                             step="4"
                             value={resolution}
                             onChange={(e) => setResolution(Number(e.target.value))}
