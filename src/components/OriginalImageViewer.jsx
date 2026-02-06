@@ -105,12 +105,14 @@ export default function OriginalImageViewer({ imageUrl, onPixelClick }) {
         const imgX = rawX + imageObj.width / 2;
         const imgY = rawY + imageObj.height / 2;
 
-        const col = Math.floor(imgX);
-        const row = Math.floor(imgY);
+        // Check bounds
+        if (imgX >= 0 && imgX < imageObj.width && imgY >= 0 && imgY < imageObj.height) {
+            // Emitting normalized coordinates (0 to 1)
+            const u = imgX / imageObj.width;
+            const v = imgY / imageObj.height;
 
-        if (col >= 0 && col < imageObj.width && row >= 0 && row < imageObj.height) {
-            const index = row * imageObj.width + col;
-            onPixelClick(index);
+            // We pass an object to distinguish from a simple integer index
+            onPixelClick({ u, v });
         }
     };
 

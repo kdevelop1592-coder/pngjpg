@@ -73,9 +73,27 @@ function App() {
         });
     };
 
-    const handlePixelClick = (index) => {
-        setActivePixelIndex(index);
-        setFocusIndex(index);
+    const handlePixelClick = (input) => {
+        let index = null;
+
+        if (typeof input === 'number') {
+            index = input;
+        } else if (input && typeof input === 'object' && 'u' in input && 'v' in input && imageData) {
+            // Convert normalized coordinates to pixel index
+            const { width, height } = imageData;
+            const col = Math.floor(input.u * width);
+            const row = Math.floor(input.v * height);
+
+            // Bounds check
+            if (col >= 0 && col < width && row >= 0 && row < height) {
+                index = row * width + col;
+            }
+        }
+
+        if (index !== null) {
+            setActivePixelIndex(index);
+            setFocusIndex(index);
+        }
     };
 
     return (
