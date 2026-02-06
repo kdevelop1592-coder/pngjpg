@@ -1,133 +1,105 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 
 export default function DataInspector({ imageData, activePixelIndex, onHoverPixel, scrollToIndex }) {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
-    const offscreenCanvasRef = useRef(null);
-
-    // Initialize offscreen canvas
-    if (!offscreenCanvasRef.current) {
-        offscreenCanvasRef.current = document.createElement('canvas');
-    }
+    const requestRef = useRef();
 
     // Constants for grid layout
     const CELL_WIDTH = 90;
     const CELL_HEIGHT = 20;
     const FONT_SIZE = 12;
 
-    // 1. Draw Static Content (Grid + Text) to Offscreen Canvas
-    useEffect(() => {
-        if (!imageData) return;
+    // Helper to draw the grid
+    const draw = useCallback(() => {
+        if (!imageData || !canvasRef.current || !containerRef.current) return;
 
-        const { width, height, pixels } = imageData;
-        const offscreen = offscreenCanvasRef.current;
-        const ctx = offscreen.getContext('2d');
-
-        // Set canvas dimensions to fit all data
-        const totalWidth = width * CELL_WIDTH;
-        const totalHeight = height * CELL_HEIGHT;
-
-        // Handle high DPI displays for sharp text
+        const container = containerRef.current;
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d', { alpha: false }); // Optimize for no transparency if possible
         const dpr = window.devicePixelRatio || 1;
-        const desiredWidth = totalWidth * dpr;
-        const desiredHeight = totalHeight * dpr;
 
-        // Resize offscreen if needed
-        if (offscreen.width !== desiredWidth || offscreen.height !== desiredHeight) {
-            offscreen.width = desiredWidth;
-            offscreen.height = desiredHeight;
-            ctx.scale(dpr, dpr);
+        // Container dimensions (viewport)
+        const viewWidth = container.clientWidth;
+        const viewHeight = container.clientHeight;
+
+        // Update canvas size if viewport changed
+        if (canvas.width !== viewWidth * dpr || canvas.height !== viewHeight * dpr) {
+            canvas.width = viewWidth * dpr;
+            canvas.height = viewHeight * dpr;
+            canvas.style.width = `${viewWidth}px`;
+            canvas.style.height = `${viewHeight}px`;
         }
 
-        // We need to set context properties after resize (or always to be safe)
+        // Reset transform for new frame
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        // Scroll position
+        const scrollTop = container.scrollTop;
+        const scrollLeft = container.scrollLeft;
+
+        // Calculate visible range
+        const startCol = Math.floor(scrollLeft / CELL_WIDTH);
+        const endCol = Math.min(imageData.width, Math.ceil((scrollLeft + viewWidth) / CELL_WIDTH));
+        const startRow = Math.floor(scrollTop / CELL_HEIGHT);
+        const endRow = Math.min(imageData.height, Math.ceil((scrollTop + viewHeight) / CELL_HEIGHT));
+
+        // Background
+        ctx.fillStyle = '#1a1a1a'; // Match container bg
+        ctx.fillRect(0, 0, viewWidth, viewHeight);
+
+        // Set Text Styles
         ctx.textBaseline = 'middle';
         ctx.textAlign = 'center';
         ctx.font = `${FONT_SIZE}px monospace`;
 
-        // Clear and Draw Static Background
-        ctx.fillStyle = '#1e1e1e';
-        ctx.fillRect(0, 0, totalWidth, totalHeight);
+        // Draw Visible Cells
+        for (let row = startRow; row < endRow; row++) {
+            for (let col = startCol; col < endCol; col++) {
+                const i = row * imageData.width + col;
+                const pixel = imageData.pixels[i];
+                if (!pixel) continue;
 
-        pixels.forEach((pixel, i) => {
-            const col = i % width;
-            const row = Math.floor(i / width);
-            const x = col * CELL_WIDTH;
-            const y = row * CELL_HEIGHT;
+                // Screen coordinates (relative to viewport)
+                const x = (col * CELL_WIDTH) - scrollLeft;
+                const y = (row * CELL_HEIGHT) - scrollTop;
 
-            // Draw Grid Lines (Static)
-            ctx.strokeStyle = '#333';
-            ctx.lineWidth = 0.5;
-            ctx.strokeRect(x, y, CELL_WIDTH, CELL_HEIGHT);
+                // Highlight Active Pixel
+                const isActive = (i === activePixelIndex);
 
-            // Draw Text (Static - inactive color)
-            ctx.fillStyle = '#aaa';
-            const text = `[${pixel.r},${pixel.g},${pixel.b}]`;
-            ctx.fillText(text, x + CELL_WIDTH / 2, y + CELL_HEIGHT / 2);
-        });
+                // Background for cell
+                if (isActive) {
+                    ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+                    ctx.fillRect(x, y, CELL_WIDTH, CELL_HEIGHT);
+                }
 
-    }, [imageData]);
-
-    // 2. Render to Main Canvas (Composition + Highlight)
-    useEffect(() => {
-        if (!imageData || !canvasRef.current || !offscreenCanvasRef.current) return;
-
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        const offscreen = offscreenCanvasRef.current;
-        const dpr = window.devicePixelRatio || 1;
-
-        // Sync main canvas size
-        if (canvas.width !== offscreen.width || canvas.height !== offscreen.height) {
-            canvas.width = offscreen.width;
-            canvas.height = offscreen.height;
-            canvas.style.width = `${offscreen.width / dpr}px`;
-            canvas.style.height = `${offscreen.height / dpr}px`;
-        }
-
-        // A. Draw Cached Content
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(offscreen, 0, 0);
-
-        // B. Draw Highlight (Dynamic)
-        if (activePixelIndex !== null && activePixelIndex >= 0) {
-            const { width, pixels } = imageData;
-            const i = activePixelIndex;
-            const pixel = pixels[i];
-
-            if (pixel) {
-                const col = i % width;
-                const row = Math.floor(i / width);
-                const x = col * CELL_WIDTH;
-                const y = row * CELL_HEIGHT;
-
-                // Reset context for dynamic drawing
-                ctx.save();
-                ctx.scale(dpr, dpr);
-                ctx.textBaseline = 'middle';
-                ctx.textAlign = 'center';
-                ctx.font = `${FONT_SIZE}px monospace`;
-
-                // 1. Highlight Background
-                ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
-                ctx.fillRect(x, y, CELL_WIDTH, CELL_HEIGHT);
-
-                // 2. Highlight Border
-                ctx.strokeStyle = '#00ff00';
-                ctx.lineWidth = 1;
+                // Grid Lines
+                ctx.strokeStyle = isActive ? '#00ff00' : '#333';
+                ctx.lineWidth = isActive ? 1.5 : 0.5;
                 ctx.strokeRect(x, y, CELL_WIDTH, CELL_HEIGHT);
 
-                // 3. Redraw Text in Active Color (White)
-                ctx.fillStyle = '#fff';
+                // Text
+                ctx.fillStyle = isActive ? '#fff' : '#aaa';
                 const text = `[${pixel.r},${pixel.g},${pixel.b}]`;
                 ctx.fillText(text, x + CELL_WIDTH / 2, y + CELL_HEIGHT / 2);
-
-                ctx.restore();
             }
         }
-
     }, [imageData, activePixelIndex]);
 
-    // Handle programmatic scrolling to specific index
+    // Render Loop using requestAnimationFrame for smooth scrolling
+    useEffect(() => {
+        const animate = () => {
+            draw();
+            requestRef.current = requestAnimationFrame(animate);
+        };
+        requestRef.current = requestAnimationFrame(animate);
+
+        return () => {
+            if (requestRef.current) cancelAnimationFrame(requestRef.current);
+        };
+    }, [draw]);
+
+    // Handle Scroll to Index
     useEffect(() => {
         if (scrollToIndex === null || !imageData || !containerRef.current) return;
 
@@ -135,46 +107,51 @@ export default function DataInspector({ imageData, activePixelIndex, onHoverPixe
         const col = scrollToIndex % width;
         const row = Math.floor(scrollToIndex / width);
 
-        // Calculate position in pixels
         const targetX = col * CELL_WIDTH;
         const targetY = row * CELL_HEIGHT;
 
-        // Center the target cell in the container
         const container = containerRef.current;
+        // Center the target
         container.scrollTop = targetY - container.clientHeight / 2 + CELL_HEIGHT / 2;
         container.scrollLeft = targetX - container.clientWidth / 2 + CELL_WIDTH / 2;
-
     }, [scrollToIndex, imageData]);
 
+    // Mouse Interaction
     const handleMouseMove = (e) => {
-        if (!imageData || !canvasRef.current) return;
+        if (!imageData || !containerRef.current) return;
 
-        const rect = canvasRef.current.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const container = containerRef.current;
+        const rect = container.getBoundingClientRect();
 
-        const col = Math.floor(x / CELL_WIDTH);
-        const row = Math.floor(y / CELL_HEIGHT);
+        // Mouse relative to viewport
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        // Adjust for scroll to get content coordinates
+        const contentX = mouseX + container.scrollLeft;
+        const contentY = mouseY + container.scrollTop;
+
+        const col = Math.floor(contentX / CELL_WIDTH);
+        const row = Math.floor(contentY / CELL_HEIGHT);
 
         if (col >= 0 && col < imageData.width && row >= 0 && row < imageData.height) {
             const index = row * imageData.width + col;
             onHoverPixel(index);
-        } else {
-            // Do not reset to null here immediately to avoid flickering when moving between cells slightly? 
-            // Actually, PixelViewer logic resets it, so we should too for consistency.
-            // onHoverPixel(null);
         }
     };
 
     const handleMouseLeave = () => {
         onHoverPixel(null);
-    }
+    };
 
     if (!imageData) return (
         <div className="glass-card" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
             Waiting for data...
         </div>
     );
+
+    const totalWidth = imageData.width * CELL_WIDTH;
+    const totalHeight = imageData.height * CELL_HEIGHT;
 
     return (
         <div className="glass-card" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -187,20 +164,28 @@ export default function DataInspector({ imageData, activePixelIndex, onHoverPixe
 
             <div
                 ref={containerRef}
+                onMouseMove={handleMouseMove}
+                onMouseLeave={handleMouseLeave}
                 style={{
                     flex: 1,
                     overflow: 'auto',
                     position: 'relative',
                     background: '#1a1a1a',
-                    paddingBottom: '24px', // Reserve space for horizontal scrollbar
-                    paddingRight: '24px'   // Reserve space for vertical scrollbar
                 }}
             >
+                {/* Spacer to force scrollbars */}
+                <div style={{ width: totalWidth, height: totalHeight, position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }} />
+
+                {/* Sticky Canvas - stays in viewport */}
                 <canvas
                     ref={canvasRef}
-                    onMouseMove={handleMouseMove}
-                    onMouseLeave={handleMouseLeave}
-                    style={{ display: 'block' }}
+                    style={{
+                        display: 'block',
+                        position: 'sticky',
+                        top: 0,
+                        left: 0,
+                        pointerEvents: 'none' // Let mouse events pass through to container? No, container handles them.
+                    }}
                 />
             </div>
         </div>
