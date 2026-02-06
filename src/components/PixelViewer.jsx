@@ -1,9 +1,15 @@
-import React, { useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useRef, useMemo, useState } from 'react';
 
 export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel, pixelSize = 20, onZoom, onPixelClick }) {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
     const offscreenCanvasRef = useRef(null);
+
+    // Drag state
+    const isDragging = useRef(false);
+    const startPos = useRef({ x: 0, y: 0 });
+    const scrollStart = useRef({ left: 0, top: 0 });
+    const [cursor, setCursor] = useState('grab');
 
     // Configurable pixel size for visualization
     const GAP = 1;
@@ -103,6 +109,71 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
 
     }, [imageData, activePixelIndex, pixelSize, dimensions]);
 
+    // --- Mouse Handlers for Drag Panning ---
+
+    const handleMouseDown = (e) => {
+        if (!containerRef.current) return;
+        isDragging.current = true;
+        setCursor('grabbing');
+        startPos.current = { x: e.clientX, y: e.clientY };
+        scrollStart.current = {
+            left: containerRef.current.scrollLeft,
+            top: containerRef.current.scrollTop
+        };
+    };
+
+    const handleMouseMove = (e) => {
+        // Handle Pan
+        if (isDragging.current && containerRef.current) {
+            e.preventDefault();
+            const dx = e.clientX - startPos.current.x;
+            const dy = e.clientY - startPos.current.y;
+            containerRef.current.scrollLeft = scrollStart.current.left - dx;
+            containerRef.current.scrollTop = scrollStart.current.top - dy;
+            return; // Don't do hover logic if dragging
+        }
+
+        // Handle Hover Logic (only if not dragging)
+        if (!imageData || !canvasRef.current) return;
+
+        const rect = canvasRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        const col = Math.floor(x / (pixelSize + GAP));
+        const row = Math.floor(y / (pixelSize + GAP));
+
+        if (col >= 0 && col < imageData.width && row >= 0 && row < imageData.height) {
+            const index = row * imageData.width + col;
+            if (index !== activePixelIndex) {
+                onHoverPixel(index);
+            }
+        } else {
+            if (activePixelIndex !== null) onHoverPixel(null);
+        }
+    };
+
+    const handleMouseUp = (e) => {
+        if (isDragging.current) {
+            isDragging.current = false;
+            setCursor('grab');
+
+            // Calculate distance moved to determine if it was a click or a drag
+            const dist = Math.hypot(e.clientX - startPos.current.x, e.clientY - startPos.current.y);
+
+            // If moved less than 5 pixels, treat as a click
+            if (dist < 5) {
+                handleClick(e);
+            }
+        }
+    };
+
+    const handleMouseLeave = () => {
+        isDragging.current = false;
+        setCursor('grab');
+        onHoverPixel(null);
+    };
+
     const handleClick = (e) => {
         if (!imageData || !canvasRef.current) return;
 
@@ -121,29 +192,6 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
         }
     };
 
-    const handleMouseMove = (e) => {
-        if (!imageData || !canvasRef.current) return;
-
-        // Optimize: Use simpler math if possible, but getBoundingClientRect is necessary for offsets
-        // potentially throttle this if it's still laggy
-        const rect = canvasRef.current.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-
-        const col = Math.floor(x / (pixelSize + GAP));
-        const row = Math.floor(y / (pixelSize + GAP));
-
-        if (col >= 0 && col < imageData.width && row >= 0 && row < imageData.height) {
-            const index = row * imageData.width + col;
-            // Only update if index changed to avoid React state thrashing
-            if (index !== activePixelIndex) {
-                onHoverPixel(index);
-            }
-        } else {
-            if (activePixelIndex !== null) onHoverPixel(null);
-        }
-    };
-
     const handleWheel = (e) => {
         if (e.ctrlKey) {
             e.preventDefault();
@@ -158,27 +206,39 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
         <div
             ref={containerRef}
             className="pixel-viewer glass-card"
+            onMouseDown={handleMouseDown}
+            onMouseUp={handleMouseUp}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
             onWheel={handleWheel}
             style={{
                 overflow: 'auto',
                 display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                padding: '2rem',
+                justifyContent: 'flex-start',
+                alignItems: 'flex-start',
+                padding: '0',
                 height: '100%',
-                background: '#111' // Darker background for contrast
+                background: '#111', // Darker background for contrast
+                cursor: cursor,
+                position: 'relative'
             }}
         >
             {imageData ? (
-                <canvas
-                    ref={canvasRef}
-                    onClick={handleClick}
-                    onMouseMove={handleMouseMove}
-                    onMouseLeave={() => onHoverPixel(null)}
-                    style={{ cursor: 'crosshair', imageRendering: 'pixelated', display: 'block' }}
-                />
+                <div style={{
+                    minWidth: '100%',
+                    minHeight: '100%',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    padding: '2rem'
+                }}>
+                    <canvas
+                        ref={canvasRef}
+                        style={{ display: 'block', imageRendering: 'pixelated' }}
+                    />
+                </div>
             ) : (
-                <div style={{ color: 'var(--text-secondary)' }}>
+                <div style={{ color: 'var(--text-secondary)', margin: 'auto' }}>
                     Upload an image to see its atoms!
                 </div>
             )}
