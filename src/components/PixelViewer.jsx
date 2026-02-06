@@ -3,28 +3,36 @@ import React, { useEffect, useRef, useState } from 'react';
 export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel, pixelSize = 20, onZoom, onPixelClick }) {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
+    const offscreenCanvasRef = useRef(null);
+
+    // Initialize offscreen canvas once
+    if (!offscreenCanvasRef.current) {
+        offscreenCanvasRef.current = document.createElement('canvas');
+    }
 
     // Configurable pixel size for visualization
     const GAP = 1;
 
+    // 1. Draw Static Content (Pixels) to Offscreen Canvas
     useEffect(() => {
-        if (!imageData || !canvasRef.current) return;
+        if (!imageData) return;
 
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
         const { width, height, pixels } = imageData;
+        const offscreen = offscreenCanvasRef.current;
+        const ctx = offscreen.getContext('2d');
 
-        // Calculate functionality canvas size
+        // Calculate size
         const desiredWidth = width * (pixelSize + GAP);
         const desiredHeight = height * (pixelSize + GAP);
 
-        if (canvas.width !== desiredWidth || canvas.height !== desiredHeight) {
-            canvas.width = desiredWidth;
-            canvas.height = desiredHeight;
+        // Resize offscreen if needed
+        if (offscreen.width !== desiredWidth || offscreen.height !== desiredHeight) {
+            offscreen.width = desiredWidth;
+            offscreen.height = desiredHeight;
         }
 
-        // Draw Pixels
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // Clear and Draw static pixels
+        ctx.clearRect(0, 0, offscreen.width, offscreen.height);
 
         pixels.forEach((pixel, i) => {
             const x = (i % width);
@@ -47,21 +55,46 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
                 pixelSize,
                 pixelSize
             );
-
-            // Draw Highlight
-            if (i === activePixelIndex) {
-                ctx.strokeStyle = '#00ff00';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(
-                    x * (pixelSize + GAP),
-                    y * (pixelSize + GAP),
-                    pixelSize,
-                    pixelSize
-                );
-            }
         });
 
-    }, [imageData, activePixelIndex, pixelSize]);
+    }, [imageData, pixelSize]); // Only re-run if data or size changes (expensive)
+
+    // 2. Render to Main Canvas (Composition + Highlight)
+    useEffect(() => {
+        if (!imageData || !canvasRef.current || !offscreenCanvasRef.current) return;
+
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        const offscreen = offscreenCanvasRef.current;
+
+        // Ensure main canvas matches offscreen size
+        if (canvas.width !== offscreen.width || canvas.height !== offscreen.height) {
+            canvas.width = offscreen.width;
+            canvas.height = offscreen.height;
+        }
+
+        // A. Draw cached static content
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(offscreen, 0, 0);
+
+        // B. Draw Highlight (Dynamic)
+        if (activePixelIndex !== null && activePixelIndex >= 0) {
+            const { width } = imageData;
+            const i = activePixelIndex;
+            const x = (i % width);
+            const y = Math.floor(i / width);
+
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(
+                x * (pixelSize + GAP),
+                y * (pixelSize + GAP),
+                pixelSize,
+                pixelSize
+            );
+        }
+
+    }, [imageData, activePixelIndex, pixelSize]); // Re-runs on hover (cheap)
 
     const handleClick = (e) => {
         if (!imageData || !canvasRef.current) return;

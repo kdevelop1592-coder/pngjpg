@@ -3,18 +3,25 @@ import React, { useEffect, useRef } from 'react';
 export default function DataInspector({ imageData, activePixelIndex, onHoverPixel, scrollToIndex }) {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
+    const offscreenCanvasRef = useRef(null);
+
+    // Initialize offscreen canvas
+    if (!offscreenCanvasRef.current) {
+        offscreenCanvasRef.current = document.createElement('canvas');
+    }
 
     // Constants for grid layout
     const CELL_WIDTH = 90;
     const CELL_HEIGHT = 20;
     const FONT_SIZE = 12;
 
+    // 1. Draw Static Content (Grid + Text) to Offscreen Canvas
     useEffect(() => {
-        if (!imageData || !canvasRef.current) return;
+        if (!imageData) return;
 
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
         const { width, height, pixels } = imageData;
+        const offscreen = offscreenCanvasRef.current;
+        const ctx = offscreen.getContext('2d');
 
         // Set canvas dimensions to fit all data
         const totalWidth = width * CELL_WIDTH;
@@ -22,65 +29,101 @@ export default function DataInspector({ imageData, activePixelIndex, onHoverPixe
 
         // Handle high DPI displays for sharp text
         const dpr = window.devicePixelRatio || 1;
-        const currentWidth = canvas.width;
-        const currentHeight = canvas.height;
         const desiredWidth = totalWidth * dpr;
         const desiredHeight = totalHeight * dpr;
 
-        // Prepare context
-        let isResized = false;
-        if (currentWidth !== desiredWidth || currentHeight !== desiredHeight) {
-            canvas.width = desiredWidth;
-            canvas.height = desiredHeight;
-            canvas.style.width = `${totalWidth}px`;
-            canvas.style.height = `${totalHeight}px`;
+        // Resize offscreen if needed
+        if (offscreen.width !== desiredWidth || offscreen.height !== desiredHeight) {
+            offscreen.width = desiredWidth;
+            offscreen.height = desiredHeight;
             ctx.scale(dpr, dpr);
-            isResized = true;
         }
 
-        // We need to reset context properties if resized (context is reset)
-        // or just set them always to be safe
+        // We need to set context properties after resize (or always to be safe)
         ctx.textBaseline = 'middle';
         ctx.textAlign = 'center';
         ctx.font = `${FONT_SIZE}px monospace`;
 
-        // Clear canvas
-        // If resized, it's already cleared. But explicit clear is safer if no resize.
-        if (!isResized) {
-            ctx.clearRect(0, 0, totalWidth, totalHeight);
-        }
-
-        ctx.fillStyle = '#1e1e1e'; // Dark background matching theme roughly
+        // Clear and Draw Static Background
+        ctx.fillStyle = '#1e1e1e';
         ctx.fillRect(0, 0, totalWidth, totalHeight);
 
-        // Draw cells
         pixels.forEach((pixel, i) => {
             const col = i % width;
             const row = Math.floor(i / width);
             const x = col * CELL_WIDTH;
             const y = row * CELL_HEIGHT;
 
-            // Only draw visible cells? For now draw all is fine if performance is okay.
-            // But we can optimize loop too if needed. 44x64 = 2816 items. Fast enough.
+            // Draw Grid Lines (Static)
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(x, y, CELL_WIDTH, CELL_HEIGHT);
 
-            // Highlight background if active
-            if (i === activePixelIndex) {
-                ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
-                ctx.fillRect(x, y, CELL_WIDTH, CELL_HEIGHT);
-                ctx.strokeStyle = '#00ff00';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(x, y, CELL_WIDTH, CELL_HEIGHT);
-            } else {
-                ctx.strokeStyle = '#333';
-                ctx.lineWidth = 0.5;
-                ctx.strokeRect(x, y, CELL_WIDTH, CELL_HEIGHT);
-            }
-
-            // Draw Text
-            ctx.fillStyle = i === activePixelIndex ? '#fff' : '#aaa';
+            // Draw Text (Static - inactive color)
+            ctx.fillStyle = '#aaa';
             const text = `[${pixel.r},${pixel.g},${pixel.b}]`;
             ctx.fillText(text, x + CELL_WIDTH / 2, y + CELL_HEIGHT / 2);
         });
+
+    }, [imageData]);
+
+    // 2. Render to Main Canvas (Composition + Highlight)
+    useEffect(() => {
+        if (!imageData || !canvasRef.current || !offscreenCanvasRef.current) return;
+
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        const offscreen = offscreenCanvasRef.current;
+        const dpr = window.devicePixelRatio || 1;
+
+        // Sync main canvas size
+        if (canvas.width !== offscreen.width || canvas.height !== offscreen.height) {
+            canvas.width = offscreen.width;
+            canvas.height = offscreen.height;
+            canvas.style.width = `${offscreen.width / dpr}px`;
+            canvas.style.height = `${offscreen.height / dpr}px`;
+        }
+
+        // A. Draw Cached Content
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(offscreen, 0, 0);
+
+        // B. Draw Highlight (Dynamic)
+        if (activePixelIndex !== null && activePixelIndex >= 0) {
+            const { width, pixels } = imageData;
+            const i = activePixelIndex;
+            const pixel = pixels[i];
+
+            if (pixel) {
+                const col = i % width;
+                const row = Math.floor(i / width);
+                const x = col * CELL_WIDTH;
+                const y = row * CELL_HEIGHT;
+
+                // Reset context for dynamic drawing
+                ctx.save();
+                ctx.scale(dpr, dpr);
+                ctx.textBaseline = 'middle';
+                ctx.textAlign = 'center';
+                ctx.font = `${FONT_SIZE}px monospace`;
+
+                // 1. Highlight Background
+                ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+                ctx.fillRect(x, y, CELL_WIDTH, CELL_HEIGHT);
+
+                // 2. Highlight Border
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x, y, CELL_WIDTH, CELL_HEIGHT);
+
+                // 3. Redraw Text in Active Color (White)
+                ctx.fillStyle = '#fff';
+                const text = `[${pixel.r},${pixel.g},${pixel.b}]`;
+                ctx.fillText(text, x + CELL_WIDTH / 2, y + CELL_HEIGHT / 2);
+
+                ctx.restore();
+            }
+        }
 
     }, [imageData, activePixelIndex]);
 

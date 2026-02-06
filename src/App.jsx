@@ -13,18 +13,19 @@ function App() {
     const [pixelSize, setPixelSize] = useState(20);
     const [sourceFile, setSourceFile] = useState(null);
     const [focusIndex, setFocusIndex] = useState(null);
+    const [colorDepth, setColorDepth] = useState('24');
 
     // Re-process image when resolution changes
     useEffect(() => {
         if (sourceFile) {
             processImageWithStatus(sourceFile);
         }
-    }, [resolution]);
+    }, [resolution, colorDepth]);
 
     const processImageWithStatus = async (file) => {
         setIsProcessing(true);
         try {
-            const data = await processImage(file, resolution);
+            const data = await processImage(file, resolution, colorDepth);
             setImageData(data);
             setActivePixelIndex(null);
             setFocusIndex(null);
@@ -104,6 +105,27 @@ function App() {
                             onChange={(e) => setResolution(Number(e.target.value))}
                             style={{ cursor: 'pointer' }}
                         />
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.1)', padding: '0.5rem 1rem', borderRadius: '8px' }}>
+                        <span style={{ fontSize: '0.9rem' }}>Depth:</span>
+                        {['1', '4', '8', '24'].map(depth => (
+                            <button
+                                key={depth}
+                                onClick={() => setColorDepth(depth)}
+                                style={{
+                                    background: colorDepth === depth ? '#007bff' : 'rgba(255,255,255,0.2)',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    color: 'white',
+                                    padding: '0.25rem 0.5rem',
+                                    cursor: 'pointer',
+                                    fontSize: '0.8rem'
+                                }}
+                            >
+                                {depth === '1' ? '1-bit' : depth === '4' ? '4-bit' : depth === '8' ? '8-bit' : '24-bit'}
+                            </button>
+                        ))}
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.1)', padding: '0.5rem 1rem', borderRadius: '8px' }}>
