@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import PixelViewer from './components/PixelViewer';
 import DataInspector from './components/DataInspector';
+import OriginalImageViewer from './components/OriginalImageViewer';
 import { processImage } from './utils/ImageProcessor';
 import { Upload, FileImage } from 'lucide-react';
 
@@ -143,9 +144,15 @@ function App() {
                 </div>
 
                 {/* Main Visualization Area */}
-                <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', minHeight: 0 }}>
+                <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', minHeight: 0 }}>
 
-                    {/* Left: Pixel Visualizer */}
+                    {/* Left: Original Image */}
+                    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                        <h2 style={{ fontSize: '1.2rem', margin: '0 0 0.5rem 0', textAlign: 'center' }}>0. Original Image</h2>
+                        <OriginalImageViewer imageUrl={imageData?.url} />
+                    </div>
+
+                    {/* Middle: Pixel Visualizer */}
                     <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                         <h2 style={{ fontSize: '1.2rem', margin: '0 0 0.5rem 0', textAlign: 'center' }}>1. Computer Vision (Pixels)</h2>
                         <PixelViewer

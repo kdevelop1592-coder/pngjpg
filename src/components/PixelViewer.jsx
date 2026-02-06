@@ -1,51 +1,48 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 
 export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel, pixelSize = 20, onZoom, onPixelClick }) {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
     const offscreenCanvasRef = useRef(null);
 
-    // Initialize offscreen canvas once
-    if (!offscreenCanvasRef.current) {
-        offscreenCanvasRef.current = document.createElement('canvas');
-    }
-
     // Configurable pixel size for visualization
     const GAP = 1;
+
+    // Memoize dimensions to avoid recalculation on every render
+    const dimensions = useMemo(() => {
+        if (!imageData) return { width: 0, height: 0 };
+        return {
+            width: imageData.width * (pixelSize + GAP),
+            height: imageData.height * (pixelSize + GAP)
+        };
+    }, [imageData, pixelSize]);
 
     // 1. Draw Static Content (Pixels) to Offscreen Canvas
     useEffect(() => {
         if (!imageData) return;
 
+        // Initialize offscreen canvas if needed
+        if (!offscreenCanvasRef.current) {
+            offscreenCanvasRef.current = document.createElement('canvas');
+        }
+
         const { width, height, pixels } = imageData;
         const offscreen = offscreenCanvasRef.current;
-        const ctx = offscreen.getContext('2d');
+        const ctx = offscreen.getContext('2d', { alpha: false }); // Optimize by disabling alpha if possible, though we use it
 
-        // Calculate size
-        const desiredWidth = width * (pixelSize + GAP);
-        const desiredHeight = height * (pixelSize + GAP);
-
-        // Resize offscreen if needed
-        if (offscreen.width !== desiredWidth || offscreen.height !== desiredHeight) {
-            offscreen.width = desiredWidth;
-            offscreen.height = desiredHeight;
+        // Resize offscreen only if dimensions changed
+        if (offscreen.width !== dimensions.width || offscreen.height !== dimensions.height) {
+            offscreen.width = dimensions.width;
+            offscreen.height = dimensions.height;
         }
 
         // Clear and Draw static pixels
-        ctx.clearRect(0, 0, offscreen.width, offscreen.height);
+        ctx.fillStyle = '#eee';
+        ctx.fillRect(0, 0, offscreen.width, offscreen.height);
 
         pixels.forEach((pixel, i) => {
             const x = (i % width);
             const y = Math.floor(i / width);
-
-            // Draw background for transparency
-            ctx.fillStyle = '#eee';
-            ctx.fillRect(
-                x * (pixelSize + GAP),
-                y * (pixelSize + GAP),
-                pixelSize,
-                pixelSize
-            );
 
             // Draw actual pixel
             ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${pixel.a / 255})`;
@@ -57,14 +54,14 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
             );
         });
 
-    }, [imageData, pixelSize]); // Only re-run if data or size changes (expensive)
+    }, [imageData, pixelSize, dimensions]);
 
     // 2. Render to Main Canvas (Composition + Highlight)
     useEffect(() => {
         if (!imageData || !canvasRef.current || !offscreenCanvasRef.current) return;
 
         const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { alpha: false });
         const offscreen = offscreenCanvasRef.current;
 
         // Ensure main canvas matches offscreen size
@@ -73,28 +70,38 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
             canvas.height = offscreen.height;
         }
 
-        // A. Draw cached static content
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(offscreen, 0, 0);
+        let animationFrameId;
 
-        // B. Draw Highlight (Dynamic)
-        if (activePixelIndex !== null && activePixelIndex >= 0) {
-            const { width } = imageData;
-            const i = activePixelIndex;
-            const x = (i % width);
-            const y = Math.floor(i / width);
+        const render = () => {
+            // A. Draw cached static content
+            ctx.drawImage(offscreen, 0, 0);
 
-            ctx.strokeStyle = '#00ff00';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(
-                x * (pixelSize + GAP),
-                y * (pixelSize + GAP),
-                pixelSize,
-                pixelSize
-            );
-        }
+            // B. Draw Highlight (Dynamic)
+            if (activePixelIndex !== null && activePixelIndex >= 0) {
+                const { width } = imageData;
+                const i = activePixelIndex;
+                const x = (i % width);
+                const y = Math.floor(i / width);
 
-    }, [imageData, activePixelIndex, pixelSize]); // Re-runs on hover (cheap)
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(
+                    x * (pixelSize + GAP),
+                    y * (pixelSize + GAP),
+                    pixelSize,
+                    pixelSize
+                );
+            }
+        };
+
+        // Use rAF for smoother updates if updates are frequent
+        animationFrameId = requestAnimationFrame(render);
+
+        return () => {
+            cancelAnimationFrame(animationFrameId);
+        };
+
+    }, [imageData, activePixelIndex, pixelSize, dimensions]);
 
     const handleClick = (e) => {
         if (!imageData || !canvasRef.current) return;
@@ -117,6 +124,8 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
     const handleMouseMove = (e) => {
         if (!imageData || !canvasRef.current) return;
 
+        // Optimize: Use simpler math if possible, but getBoundingClientRect is necessary for offsets
+        // potentially throttle this if it's still laggy
         const rect = canvasRef.current.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
@@ -126,19 +135,18 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
 
         if (col >= 0 && col < imageData.width && row >= 0 && row < imageData.height) {
             const index = row * imageData.width + col;
-            onHoverPixel(index);
+            // Only update if index changed to avoid React state thrashing
+            if (index !== activePixelIndex) {
+                onHoverPixel(index);
+            }
         } else {
-            onHoverPixel(null);
+            if (activePixelIndex !== null) onHoverPixel(null);
         }
     };
 
     const handleWheel = (e) => {
         if (e.ctrlKey) {
-            // Prevent browser zoom if possible, though React event might be too late for some browsers
-            // But main goal is to detect intent
-            // e.preventDefault(); // React synthetic events might warn about this if passive.
-
-            // Zoom In/Out
+            e.preventDefault();
             const delta = e.deltaY < 0 ? 1 : -1;
             if (onZoom) {
                 onZoom(delta);
@@ -157,7 +165,8 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
                 justifyContent: 'center',
                 alignItems: 'center',
                 padding: '2rem',
-                height: '100%'
+                height: '100%',
+                background: '#111' // Darker background for contrast
             }}
         >
             {imageData ? (
@@ -166,7 +175,7 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
                     onClick={handleClick}
                     onMouseMove={handleMouseMove}
                     onMouseLeave={() => onHoverPixel(null)}
-                    style={{ cursor: 'crosshair', imageRendering: 'pixelated' }}
+                    style={{ cursor: 'crosshair', imageRendering: 'pixelated', display: 'block' }}
                 />
             ) : (
                 <div style={{ color: 'var(--text-secondary)' }}>
