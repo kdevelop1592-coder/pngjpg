@@ -144,7 +144,7 @@ function App() {
                 </div>
 
                 {/* Main Visualization Area */}
-                <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', minHeight: 0 }}>
+                <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '1rem', minHeight: 0 }}>
 
                     {/* Left: Original Image */}
                     <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
