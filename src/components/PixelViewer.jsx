@@ -5,10 +5,12 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
     const containerRef = useRef(null);
     const offscreenCanvasRef = useRef(null);
 
+    // Pan state (virtual camera offset)
+    const panOffset = useRef({ x: 0, y: 0 });
+
     // Drag state
     const isDragging = useRef(false);
-    const startPos = useRef({ x: 0, y: 0 });
-    const scrollStart = useRef({ left: 0, top: 0 });
+    const lastMousePos = useRef({ x: 0, y: 0 });
     const [cursor, setCursor] = useState('grab');
 
     // Configurable pixel size for visualization
@@ -34,7 +36,7 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
 
         const { width, height, pixels } = imageData;
         const offscreen = offscreenCanvasRef.current;
-        const ctx = offscreen.getContext('2d', { alpha: false }); // Optimize by disabling alpha if possible, though we use it
+        const ctx = offscreen.getContext('2d', { alpha: false });
 
         // Resize offscreen only if dimensions changed
         if (offscreen.width !== dimensions.width || offscreen.height !== dimensions.height) {
@@ -43,7 +45,7 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
         }
 
         // Clear and Draw static pixels
-        ctx.fillStyle = '#eee';
+        ctx.fillStyle = '#111'; // Match background
         ctx.fillRect(0, 0, offscreen.width, offscreen.height);
 
         pixels.forEach((pixel, i) => {
@@ -62,23 +64,33 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
 
     }, [imageData, pixelSize, dimensions]);
 
-    // 2. Render to Main Canvas (Composition + Highlight)
+    // 2. Render to Main Canvas (Composition + Highlight + Pan)
     useEffect(() => {
-        if (!imageData || !canvasRef.current || !offscreenCanvasRef.current) return;
+        if (!imageData || !canvasRef.current || !offscreenCanvasRef.current || !containerRef.current) return;
 
         const canvas = canvasRef.current;
+        const container = containerRef.current;
         const ctx = canvas.getContext('2d', { alpha: false });
         const offscreen = offscreenCanvasRef.current;
 
-        // Ensure main canvas matches offscreen size
-        if (canvas.width !== offscreen.width || canvas.height !== offscreen.height) {
-            canvas.width = offscreen.width;
-            canvas.height = offscreen.height;
+        // Resize main canvas to fill container
+        if (canvas.width !== container.clientWidth || canvas.height !== container.clientHeight) {
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
         }
 
         let animationFrameId;
 
         const render = () => {
+            // Clear background
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+
+            // Apply Pan Transform
+            ctx.translate(panOffset.current.x, panOffset.current.y);
+
             // A. Draw cached static content
             ctx.drawImage(offscreen, 0, 0);
 
@@ -98,6 +110,8 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
                     pixelSize
                 );
             }
+
+            ctx.restore();
         };
 
         // Use rAF for smoother updates if updates are frequent
@@ -107,38 +121,76 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
             cancelAnimationFrame(animationFrameId);
         };
 
-    }, [imageData, activePixelIndex, pixelSize, dimensions]);
+        // Re-render when panOffset changes? No, panOffset is a ref.
+        // We need to trigger render loop. 
+        // Actually, simply calling render() once here isn't enough for continuous animation if we were animating,
+        // but here we render on dependency change. 
+        // Wait, pan updates are in MouseMove, which doesn't trigger re-render of React component.
+        // We need a persistent loop OR trigger re-render on mouse move.
+        // For performance, let's use a persistent loop or trigger the render function from mouse move.
+
+        // Let's modify: Make the render function accessible or run it inside a rAF loop triggered by interaction.
+        // For now, to keep it reactive to props, let's keep it here.
+        // AND add a way to trigger it from mouse events.
+    }, [imageData, activePixelIndex, pixelSize, dimensions, cursor]); // Cursor dependency to trigger redraw if needed? No.
+
+    // Helper to trigger a single frame render manually (for pan updates)
+    const requestRender = () => {
+        if (!imageData || !canvasRef.current || !offscreenCanvasRef.current) return;
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        const offscreen = offscreenCanvasRef.current;
+
+        ctx.fillStyle = '#111';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.save();
+        ctx.translate(panOffset.current.x, panOffset.current.y);
+        ctx.drawImage(offscreen, 0, 0);
+
+        if (activePixelIndex !== null && activePixelIndex >= 0) {
+            const { width } = imageData;
+            const i = activePixelIndex;
+            const x = (i % width);
+            const y = Math.floor(i / width);
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x * (pixelSize + GAP), y * (pixelSize + GAP), pixelSize, pixelSize);
+        }
+        ctx.restore();
+    };
 
     // --- Mouse Handlers for Drag Panning ---
 
     const handleMouseDown = (e) => {
-        if (!containerRef.current) return;
         isDragging.current = true;
         setCursor('grabbing');
-        startPos.current = { x: e.clientX, y: e.clientY };
-        scrollStart.current = {
-            left: containerRef.current.scrollLeft,
-            top: containerRef.current.scrollTop
-        };
+        lastMousePos.current = { x: e.clientX, y: e.clientY };
     };
 
     const handleMouseMove = (e) => {
         // Handle Pan
-        if (isDragging.current && containerRef.current) {
+        if (isDragging.current) {
             e.preventDefault();
-            const dx = e.clientX - startPos.current.x;
-            const dy = e.clientY - startPos.current.y;
-            containerRef.current.scrollLeft = scrollStart.current.left - dx;
-            containerRef.current.scrollTop = scrollStart.current.top - dy;
-            return; // Don't do hover logic if dragging
+            const dx = e.clientX - lastMousePos.current.x;
+            const dy = e.clientY - lastMousePos.current.y;
+
+            panOffset.current.x += dx;
+            panOffset.current.y += dy;
+
+            lastMousePos.current = { x: e.clientX, y: e.clientY };
+
+            requestRender(); // Force redraw on pan
+            return;
         }
 
         // Handle Hover Logic (only if not dragging)
         if (!imageData || !canvasRef.current) return;
 
         const rect = canvasRef.current.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        // Adjust mouse coordinate by pan offset
+        const x = e.clientX - rect.left - panOffset.current.x;
+        const y = e.clientY - rect.top - panOffset.current.y;
 
         const col = Math.floor(x / (pixelSize + GAP));
         const row = Math.floor(y / (pixelSize + GAP));
@@ -158,13 +210,41 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
             isDragging.current = false;
             setCursor('grab');
 
-            // Calculate distance moved to determine if it was a click or a drag
-            const dist = Math.hypot(e.clientX - startPos.current.x, e.clientY - startPos.current.y);
+            // If dragging happened, we already returned from MouseMove, so no click.
+            // But what if it was a tiny drag? Simple Distance check.
+            // We calculated dx/dy incrementally. Let's track total movement if needed?
+            // Or simpler: handle click separately.
 
-            // If moved less than 5 pixels, treat as a click
-            if (dist < 5) {
-                handleClick(e);
-            }
+            // Check if it was a click (distance from down < threshold)
+            // But we didn't store start pos for distance check in this refactor.
+            // Let's rely on standard logic: if it moved significantly, it's a drag.
+            // For now, let's assume if MouseUp happens, check if mouse moved?
+
+            // Re-use logic: if displacement is small.
+            // Let's add startPos back if we want strict click detection.
+            // Simplified: If dragging flag was true, we just stop. 
+            // We can rely on onClick, but React's onClick might fire after MouseUp.
+            // Let's handle click manually here to be safe with canvas.
+
+            // Actually, let's revert to a "click only if didn't move much" logic:
+            // But we don't have the original start pos stored in a variable that persists specifically for click check
+            // unless we add it. 
+        }
+    };
+
+    // Separate ref for click detection
+    const clickStartPos = useRef({ x: 0, y: 0 });
+
+    const handleMouseDownWrapper = (e) => {
+        clickStartPos.current = { x: e.clientX, y: e.clientY };
+        handleMouseDown(e);
+    };
+
+    const handleMouseUpWrapper = (e) => {
+        handleMouseUp(e);
+        const dist = Math.hypot(e.clientX - clickStartPos.current.x, e.clientY - clickStartPos.current.y);
+        if (dist < 5) {
+            handleClick(e);
         }
     };
 
@@ -178,8 +258,9 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
         if (!imageData || !canvasRef.current) return;
 
         const rect = canvasRef.current.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        // Adjust for pan
+        const x = e.clientX - rect.left - panOffset.current.x;
+        const y = e.clientY - rect.top - panOffset.current.y;
 
         const col = Math.floor(x / (pixelSize + GAP));
         const row = Math.floor(y / (pixelSize + GAP));
@@ -202,41 +283,45 @@ export default function PixelViewer({ imageData, activePixelIndex, onHoverPixel,
         }
     };
 
+    // Center image on load
+    useEffect(() => {
+        if (imageData && containerRef.current && dimensions.width > 0) {
+            const container = containerRef.current;
+            // Center: (ContainerW - ContentW) / 2
+            panOffset.current = {
+                x: Math.max(0, (container.clientWidth - dimensions.width) / 2),
+                y: Math.max(0, (container.clientHeight - dimensions.height) / 2)
+            };
+            requestRender();
+        }
+    }, [imageData, dimensions]);
+
     return (
         <div
             ref={containerRef}
             className="pixel-viewer glass-card"
-            onMouseDown={handleMouseDown}
-            onMouseUp={handleMouseUp}
+            onMouseDown={handleMouseDownWrapper}
+            onMouseUp={handleMouseUpWrapper}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
             onWheel={handleWheel}
             style={{
-                overflow: 'auto',
+                overflow: 'hidden', // Hide scrollbars
                 display: 'flex',
-                justifyContent: 'flex-start',
-                alignItems: 'flex-start',
+                // justifyContent: 'center', // handled by panOffset
+                // alignItems: 'center',
                 padding: '0',
                 height: '100%',
-                background: '#111', // Darker background for contrast
+                background: '#111',
                 cursor: cursor,
                 position: 'relative'
             }}
         >
             {imageData ? (
-                <div style={{
-                    minWidth: '100%',
-                    minHeight: '100%',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    padding: '2rem'
-                }}>
-                    <canvas
-                        ref={canvasRef}
-                        style={{ display: 'block', imageRendering: 'pixelated' }}
-                    />
-                </div>
+                <canvas
+                    ref={canvasRef}
+                    style={{ display: 'block', imageRendering: 'pixelated' }}
+                />
             ) : (
                 <div style={{ color: 'var(--text-secondary)', margin: 'auto' }}>
                     Upload an image to see its atoms!
